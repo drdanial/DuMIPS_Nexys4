@@ -30,10 +30,14 @@ use IEEE.STD_LOGIC_UNSIGNED.ALL;
 --use UNISIM.VComponents.all;
 
 entity IO_Module is
+	 generic (
+		datapath_size : integer;
+		word_size : integer;
+	 );
     Port ( up       : in STD_LOGIC;
 	        down     : in STD_LOGIC;
 			  reset    : in STD_LOGIC;
-			  io_addr  : in STD_LOGIC_VECTOR(7 downto 0);
+			  io_addr  : in STD_LOGIC_VECTOR(15 downto 0);
 			  dataIn	  : in STD_LOGIC_VECTOR(15 downto 0);
 			  dataOut  : out STD_LOGIC_VECTOR(15 downto 0);
 			  -- physical I/O connections
@@ -70,7 +74,10 @@ end component counter;
 
 -- internal signals
 --signal up, down : STD_LOGIC;
-	io_enable <= '1' WHEN ra_bus(datapath_size - 1 down to datapath_size - 8) = X"C0" ELSE '0';
+	signal io_enable : STD_LOGIC;
+	signal counterValue : STD_LOGIC_VECTOR(15 downto 0);
+	signal sevenSegmentValue : STD_LOGIC_VECTOR(31 downto 0);
+	
 
 
 begin
@@ -81,35 +88,47 @@ theCounter: component counter
        	 increment   => up,    -- count up one
        	 decrement   => down,  -- count down one
 			 reset		=>  reset,  -- reset counter to zero
-			 pcounter   =>	  pcounter); -- 16 bit counter 
+			 pcounter   =>	  counterValue); -- 16 bit counter 
 
 	
 
 display: component sevenSegmentDisplay 
-    Port map (Digits(15 downto 0) => hexValue(15 downto 0),
+    Port map (Digits => sevenSegmentValue,
 			  sysclock => sysclock,
            sevenSegs => segments,
            anodes => anodes);
 			  
 			  
+
+	-- all 16 switches
+	-- all 6 buttons (plus any other inputs).
+
+	io_enable <= '1' WHEN io_addr(datapath_size - 1 downto datapath_size - 8) = X"C0"
+				ELSE '0';
+	
+	
+	-- MUX to get proper data input given lower 8 bits of address
+	
+	dataOut <= switches			 		WHEN io_addr(7 downto 0) = X"00"  -- read from digital switches 0xC000
+			ELSE buttons					WHEN io_addr(7 downto 0) = X"04"  -- read from buttons 0xC004
+			ELSE counterValue				WHEN io_addr(7 downto 0) = X"08"  -- read from counter 0xC008
+			ELSE "1111100000000001" ;  -- this line needs modifying if datapath_size changes 
+	
 	--DJN: need to fix this so that the output is enabled at the proper time.  Input can
 	--always happen and will be muxed out at one level up.  
 
-	-- MUX to get proper data input given lower 8 bits of address
-	
-	-- also we will need address for 
+	PROCESS(io_enable)
+	BEGIN
+		if (io_enable'event) and (io_enable = '1') then
+		
+		-- here we write to one of the following connections.  
 	-- upper four digits of seven-seg display
 	-- lower four digits of seven-seg display
 	-- all 16 LEDs at once.
-	-- all 16 switches
-	-- all 6 buttons (plus any other inputs).
-	
-	
-	iovalue <= digin0				 		WHEN add_bus(7 downto 0) = X"00"  -- read from digital switches 0xC000
-			ELSE digin1						WHEN add_bus(7 downto 0) = X"04"  -- read from buttons 0xC004
-			ELSE pcounter   				WHEN add_bus(7 downto 0) = X"08"  -- read from counter 0xC008
-			ELSE "1111100000000001" ;  -- this line needs modifying if datapath_size changes 
-	
+			leds <= dataIn;
+		end if;
+	END PROCESS;
+		
 
 		
 end Behavioral;

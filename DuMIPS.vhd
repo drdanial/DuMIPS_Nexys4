@@ -122,7 +122,7 @@ architecture structure of DuMIPS is
 	end component;
 
 
-   component dmemory 
+   component memioctrl 
 		generic (
 			datapath_size : integer;
 			word_size : integer;
@@ -244,7 +244,7 @@ begin
 			PCadd => PCadd);
 			--phi2 => phi2);
 
-   MEM:  dmemory 
+   MEMIO:  memioctrl 
 	generic map (
 			datapath_size => datapath_size,
 			word_size => word_size,
@@ -263,9 +263,10 @@ begin
 			digin => switchin,
 			phi2 => phi2, reset => reset);
 
---	phi2 <= sys_clk;  If we can get the delay small enough, we won't have to divide the clock.  
+	-- reset button is active low when pressed.  Opposite of other buttons. 
 	reset <= not reset_in;
 	
+--	phi2 <= sys_clk;  If we can get the delay small enough, we won't have to divide the clock.  
 process(sys_clk,phi2) 
 	begin
 	if (sys_clk'event and sys_clk = '1') then

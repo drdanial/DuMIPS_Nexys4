@@ -14,7 +14,7 @@ USE IEEE.STD_LOGIC_ARITH.ALL;
 USE IEEE.STD_LOGIC_UNSIGNED.ALL;
 USE IEEE.numeric_std.ALL;
 
-entity dmemory is
+entity memioctrl is
 	generic (
 		datapath_size : integer;
 		word_size : integer;
@@ -26,24 +26,24 @@ entity dmemory is
 		wd_bus : in std_logic_vector(datapath_size - 1 downto 0);
 		add_bus : in std_logic_vector(datapath_size - 1 downto 0);
 		MemRead, MemWrite, MemtoReg : in std_logic;
-		
-		segments : out std_logic_vector(0 to 7);  -- 8th bit is decimal point
-		anodes   : out std_logic_vector(7 downto 0);  -- for each of the eight digits
 
+		-- ports that connect to 7 segment display anodes and cathodes.
+		segments : out std_logic_vector(0 to 7);      -- 8th bit is decimal point
+		anodes   : out std_logic_vector(7 downto 0);  -- for each of the eight digits
 		-- I/O ports to the processor follow here
-		digOut0 : out std_logic_vector(15 downto 0);  -- 8 LEDs on Nexys4
+		digOut0 : out std_logic_vector(15 downto 0);  -- 16 LEDs on Nexys4
 		-- go to slide switches on Nexys4
 		digIn0 : in std_logic_vector(15 downto 0); 
-		-- buttons on Nexys4
+		-- buttons on Nexys4 plus whatever else we want to connect it to. 
 		digIn1 : in std_logic_vector(15 downto 0);
 		
 		phi2,reset: in std_logic);
 
-end dmemory;
+end memioctrl;
 
 
 
-architecture behavior of dmemory is
+architecture behavior of memioctrl is
 
 -- components:
 ------------- Begin Cut here for COMPONENT Declaration ------ COMP_TAG
@@ -61,6 +61,10 @@ END COMPONENT;
 
 
 	component IO_Module is
+		generic (
+			datapath_size : integer;
+			word_size : integer;
+		);
 		Port ( up       : in  STD_LOGIC;
 				 down     : in  STD_LOGIC;
 			    RESET    : in STD_LOGIC;
@@ -106,22 +110,26 @@ begin
 	Data_RAM : data_mem
 	PORT MAP (clka => phi2,
 				 ena => mem_enable,
-             wea => wea,
+             wea => write_enable,
              addra => add_bus,
              dina => wd_bus,
-             douta => rd_bus);
+             douta => read_data);
 	 
 -- INST_TAG_END ------ End INSTANTIATION Template ------------
 
 
 	ioport0:  IO_Module
+	generic map (
+			datapath_size => datapath_size,
+			word_size => word_size)
 	Port map ( up => up,
 			     down => down,
-				--  need to map reset here
+				  --  need to map reset here
 				  reset => reset,
-				  hexValue => port1,
-				  pcounter => pcounter,
-					-- physical I/O connections
+				  io_addr => add_bus,
+				  dataIn => wd_bus,
+				  dataOut => iovalue,
+				  -- physical I/O connections
 				  leds	 => digOut0,
 			     switches => digIn0,
 			     buttons => digIn1,
@@ -143,7 +151,7 @@ begin
 	
 	-- Logic used to handle a read from an I/O port rather than memory. 
 	-- I/0 memory locations are all at 0xC0XX
-	
+   -- need signals for data output bus to MUX between memory, IO, and Regsiter file.  
 				  
 	mem_enable <= not io_enable and (MemRead or MemWrite);
 	write_enable <= (MemWrite = '1') and not io_enable;
