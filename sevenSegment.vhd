@@ -28,16 +28,14 @@ use IEEE.STD_LOGIC_UNSIGNED.ALL;
 --use UNISIM.VComponents.all;
 
 entity sevenSegmentDisplay is
-    Port ( Digits : in  STD_LOGIC_VECTOR (15 downto 0);
+    Port ( Digits : in  STD_LOGIC_VECTOR (31 downto 0);
 			  sysclock : in STD_LOGIC;
            sevenSegs : out  STD_LOGIC_VECTOR(0 to 7);  -- 8th bit is decimal point
-           anodes    : out  STD_LOGIC_VECTOR(3 downto 0));
+           anodes    : out  STD_LOGIC_VECTOR(7 downto 0));
 end sevenSegmentDisplay;
 
 architecture Behavioral of sevenSegmentDisplay is
 
-
-signal flip: STD_LOGIC := '1';
 signal counter : STD_LOGIC_VECTOR(19 downto 0) := "00000000000000000000";
 signal digit: STD_LOGIC_VECTOR(3 downto 0);
 
@@ -53,12 +51,16 @@ process(sysclock)
 
 process(Digits, counter, digit) 
 	begin 
-		case counter(19 downto 18) is
-			 when       "00" => anodes <= "1110"; digit <= digits(3 downto 0);
-			 when       "01" => anodes <= "1101"; digit <= digits(7 downto 4);
-			 when       "10" => anodes <= "1011"; digit <= digits(11 downto 8);
-			 when       "11" => anodes <= "0111"; digit <= digits(15 downto 12);
-			 when 		others => anodes <= "0110";
+		case counter(20 downto 18) is
+			 when       "000" => anodes <= "11111110"; digit <= digits(3 downto 0);
+			 when       "001" => anodes <= "11111101"; digit <= digits(7 downto 4);
+			 when       "010" => anodes <= "11111011"; digit <= digits(11 downto 8);
+			 when       "011" => anodes <= "11110111"; digit <= digits(15 downto 12);
+			 when       "100" => anodes <= "11101111"; digit <= digits(19 downto 16);
+			 when       "101" => anodes <= "11011111"; digit <= digits(23 downto 20);
+			 when       "110" => anodes <= "10111111"; digit <= digits(27 downto 24);
+			 when       "111" => anodes <= "01111111"; digit <= digits(31 downto 28);
+			 when 		others => anodes <= "01100110";
 		end case;
 				
 		case digit is

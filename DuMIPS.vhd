@@ -130,9 +130,8 @@ architecture structure of DuMIPS is
 		);
 		port(
 		  rd_bus : out std_logic_vector(datapath_size - 1 downto 0);
-        ra_bus : in std_logic_vector(datapath_size - 1 downto 0);
         wd_bus : in std_logic_vector(datapath_size - 1 downto 0);
-        wadd_bus : in std_logic_vector(datapath_size - 1 downto 0);
+        add_bus : in std_logic_vector(datapath_size - 1 downto 0);
         MemRead, Memwrite, MemtoReg : in std_logic;
 		  -- seven segment LED display outputs
 		  segments : out std_logic_vector(0 to 7);  -- 8th bit is decimal point
@@ -253,9 +252,8 @@ begin
 			)
 	port map ( 
 			rd_bus => wrd_bus,
-			ra_bus => ALUResult,
 			wd_bus => rr2d_bus,
-			wadd_bus => ALUResult,
+			add_bus => ALUResult,
 			MemRead => MemRead, 
 			Memwrite => MemWrite, 
 			MemtoReg => MemtoReg,

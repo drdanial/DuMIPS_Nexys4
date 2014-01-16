@@ -33,10 +33,16 @@ entity IO_Module is
     Port ( up       : in STD_LOGIC;
 	        down     : in STD_LOGIC;
 			  reset    : in STD_LOGIC;
-			  hexValue : in STD_LOGIC_VECTOR(15 downto 0);
-			  pcounter : out STD_LOGIC_VECTOR(15 downto 0); 
+			  io_addr  : in STD_LOGIC_VECTOR(7 downto 0);
+			  dataIn	  : in STD_LOGIC_VECTOR(15 downto 0);
+			  dataOut  : out STD_LOGIC_VECTOR(15 downto 0);
+			  -- physical I/O connections
+			  leds	  : out STD_LOGIC_VECTOR(15 downto 0);
+			  switches : in STD_LOGIC_VECTOR(15 downto 0);
+			  buttons  : in STD_LOGIC_VECTOR(15 downto 0);
 			  segments : out  STD_LOGIC_VECTOR(0 to 7);  -- 8th bit is decimal point
-           anodes   : out  STD_LOGIC_VECTOR(3 downto 0);
+           anodes   : out  STD_LOGIC_VECTOR(7 downto 0);
+			  
            sysclock : in  STD_LOGIC);
 end IO_Module;
 
@@ -46,10 +52,10 @@ architecture Behavioral of IO_Module is
 -- seven segment decoder (may need modification for Nexsys 2)
 
 component sevenSegmentDisplay is
-    Port ( Digits : in  STD_LOGIC_VECTOR (15 downto 0);
+    Port ( Digits : in  STD_LOGIC_VECTOR (31 downto 0);
 			  sysclock : in STD_LOGIC;
            sevenSegs : out  STD_LOGIC_VECTOR(0 to 7);  -- 8th bit is decimal point
-           anodes : out  STD_LOGIC_VECTOR(3 downto 0));
+           anodes : out  STD_LOGIC_VECTOR(7 downto 0));
 end component sevenSegmentDisplay;
 
 -- a simple binary up/down counter
@@ -61,15 +67,10 @@ component counter is
 			  pcounter     : out std_logic_vector(15 downto 0)); -- 16 bit counter
 end component counter;
 
--- add debounce module here.
-component Debouncer is
-	  Port ( btn_in : in STD_LOGIC;
-				clk : in STD_LOGIC;
-				db_btn : out STD_LOGIC);
-end component Debouncer;
 
 -- internal signals
 --signal up, down : STD_LOGIC;
+	io_enable <= '1' WHEN ra_bus(datapath_size - 1 down to datapath_size - 8) = X"C0" ELSE '0';
 
 
 begin
@@ -89,7 +90,26 @@ display: component sevenSegmentDisplay
 			  sysclock => sysclock,
            sevenSegs => segments,
            anodes => anodes);
+			  
+			  
+	--DJN: need to fix this so that the output is enabled at the proper time.  Input can
+	--always happen and will be muxed out at one level up.  
 
+	-- MUX to get proper data input given lower 8 bits of address
+	
+	-- also we will need address for 
+	-- upper four digits of seven-seg display
+	-- lower four digits of seven-seg display
+	-- all 16 LEDs at once.
+	-- all 16 switches
+	-- all 6 buttons (plus any other inputs).
+	
+	
+	iovalue <= digin0				 		WHEN add_bus(7 downto 0) = X"00"  -- read from digital switches 0xC000
+			ELSE digin1						WHEN add_bus(7 downto 0) = X"04"  -- read from buttons 0xC004
+			ELSE pcounter   				WHEN add_bus(7 downto 0) = X"08"  -- read from counter 0xC008
+			ELSE "1111100000000001" ;  -- this line needs modifying if datapath_size changes 
+	
 
 		
 end Behavioral;
