@@ -51,7 +51,7 @@ process(sysclock)
 
 process(Digits, counter, digit) 
 	begin 
-		case counter(20 downto 18) is
+		case counter(19 downto 17) is
 			 when       "000" => anodes <= "11111110"; digit <= digits(3 downto 0);
 			 when       "001" => anodes <= "11111101"; digit <= digits(7 downto 4);
 			 when       "010" => anodes <= "11111011"; digit <= digits(11 downto 8);

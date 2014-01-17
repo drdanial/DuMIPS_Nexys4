@@ -32,9 +32,10 @@ generic (
 			dmem_size : integer := 3 		-- address width of data memory
 			);
 port(    reset_in,sys_clk: in std_logic; 
-			switchin  : in std_logic_vector(10 downto 0); -- btn2, btn1, btn0, sw7 downto sw0.  
-			leds      : out std_logic_vector(7 downto 0);
-			anodes    : out std_logic_vector(3 downto 0);
+			switchin  : in std_logic_vector(15 downto 0); -- 16 switches  
+			leds      : out std_logic_vector(15 downto 0); -- 16 LEDs
+			buttons	 : in std_logic_vector(15 downto 0);  -- buttons and anthing else we want to connect
+			anodes    : out std_logic_vector(7 downto 0); -- the 8 seven-seg LED anodes
 			segments  : out std_logic_vector(0 to 7));  -- 8th bit is decimal point
 
 end DuMIPS;
@@ -122,7 +123,7 @@ architecture structure of DuMIPS is
 	end component;
 
 
-   component dmemory 
+   component memioctrl 
 		generic (
 			datapath_size : integer;
 			word_size : integer;
@@ -133,17 +134,16 @@ architecture structure of DuMIPS is
         wd_bus : in std_logic_vector(datapath_size - 1 downto 0);
         add_bus : in std_logic_vector(datapath_size - 1 downto 0);
         MemRead, Memwrite, MemtoReg : in std_logic;
-		  -- seven segment LED display outputs
-		  segments : out std_logic_vector(0 to 7);  -- 8th bit is decimal point
-		  anodes   : out std_logic_vector(3 downto 0);
-
-		  -- I/O ports to the processor follow here
-		  port0 : out std_logic_vector(7 downto 0);
-
-		-- digin(10 downto 8) go to push buttons
-		-- digin(7 downto 0) go to slide switches
-		  digin : in std_logic_vector(10 downto 0);  
-		  phi2,reset: in std_logic);
+			-- ports that connect to 7 segment display anodes and cathodes.
+			segments : out std_logic_vector(0 to 7);      -- 8th bit is decimal point
+			anodes   : out std_logic_vector(7 downto 0);  -- for each of the eight digits
+			-- I/O ports to the processor follow here
+			digOut0 : out std_logic_vector(15 downto 0);  -- 16 LEDs on Nexys4
+			-- go to slide switches on Nexys4
+			digIn0 : in std_logic_vector(15 downto 0); 
+			-- buttons on Nexys4 plus whatever else we want to connect it to. 
+			digIn1 : in std_logic_vector(15 downto 0);
+			phi2,reset: in std_logic);
 
    end component;
 
@@ -244,7 +244,7 @@ begin
 			PCadd => PCadd);
 			--phi2 => phi2);
 
-   MEM:  dmemory 
+   MEMIO:  memioctrl 
 	generic map (
 			datapath_size => datapath_size,
 			word_size => word_size,
@@ -257,15 +257,22 @@ begin
 			MemRead => MemRead, 
 			Memwrite => MemWrite, 
 			MemtoReg => MemtoReg,
+			
+			-- connections to I/O devices on the board. 
 			segments => segments,
 			anodes => anodes,
-			port0 => leds,
-			digin => switchin,
+			-- I/O ports to the processor follow here
+			digOut0 => leds,
+			-- go to slide switches on Nexys4
+			digIn0 => switchin,
+			-- buttons on Nexys4 plus whatever else we want to connect it to. 
+			digIn1 => buttons,
 			phi2 => phi2, reset => reset);
 
---	phi2 <= sys_clk;  If we can get the delay small enough, we won't have to divide the clock.  
+	-- reset button is active low when pressed.  Opposite of other buttons. 
 	reset <= not reset_in;
 	
+--	phi2 <= sys_clk;  If we can get the delay small enough, we won't have to divide the clock.  
 process(sys_clk,phi2) 
 	begin
 	if (sys_clk'event and sys_clk = '1') then

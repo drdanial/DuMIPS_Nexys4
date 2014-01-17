@@ -52,11 +52,11 @@ architecture behavior of Ifetch is
 
   X"3410c000", --  ori $16, $0, -16384      ; 12: ori $s0, $zero, 0xC000 # point a register at 0xC000 
   X"00008825", --  or $17, $0, $0           ; 14: or $s1, $zero, $zero # $s1 points to memory 
-  X"8e080004", --  lw $8, 4($16)            ; 17: lw $t0, 4($s0) # get counter 
+  X"8e080008", --  lw $8, 4($16)            ; 17: lw $t0, 4($s0) # get counter 
   X"8e090000", --  lw $9, 0($16)            ; 18: lw $t1, 0($s0) # get switches and pushbuttons 
 
   X"ae08000c", --  sw $8, 12($16)           ; 20: sw $t0, 12($s0) # display count on 7-segment display 
-  X"ae090008", --  sw $9, 8($16)            ; 21: sw $t1, 8($s0) # display switches 8 leds 
+  X"ae090080", --  sw $9, 8($16)            ; 21: sw $t1, 8($s0) # display switches 8 leds 
   X"1000fffb", --  beq $0, $0, -20 [loop-0x00400018]
 	
 		(x"00000000"),	

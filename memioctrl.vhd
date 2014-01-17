@@ -14,7 +14,7 @@ USE IEEE.STD_LOGIC_ARITH.ALL;
 USE IEEE.STD_LOGIC_UNSIGNED.ALL;
 USE IEEE.numeric_std.ALL;
 
-entity dmemory is
+entity memioctrl is
 	generic (
 		datapath_size : integer;
 		word_size : integer;
@@ -39,20 +39,19 @@ entity dmemory is
 		
 		phi2,reset: in std_logic);
 
-end dmemory;
+end memioctrl;
 
 
 
-architecture behavior of dmemory is
+architecture behavior of memioctrl is
 
 -- components:
 ------------- Begin Cut here for COMPONENT Declaration ------ COMP_TAG
 COMPONENT data_mem
   PORT (
     clka : IN STD_LOGIC;
-    ena : IN STD_LOGIC;
-    wea : IN STD_LOGIC_VECTOR(0 DOWNTO 0);
-    addra : IN STD_LOGIC_VECTOR(9 DOWNTO 0);
+	 wea : IN STD_LOGIC_VECTOR(0 DOWNTO 0);
+    addra : IN STD_LOGIC_VECTOR(7 DOWNTO 0);
     dina : IN STD_LOGIC_VECTOR(15 DOWNTO 0);
     douta : OUT STD_LOGIC_VECTOR(15 DOWNTO 0)
   );
@@ -61,6 +60,9 @@ END COMPONENT;
 
 
 	component IO_Module is
+		generic (
+			datapath_size : integer;
+			word_size : integer);
 		Port ( up       : in  STD_LOGIC;
 				 down     : in  STD_LOGIC;
 			    RESET    : in STD_LOGIC;
@@ -72,7 +74,7 @@ END COMPONENT;
 			    switches : in STD_LOGIC_VECTOR(15 downto 0);
 			    buttons  : in STD_LOGIC_VECTOR(15 downto 0);
 			    segments : out  STD_LOGIC_VECTOR(0 to 7);  -- 8th bit is decimal point
-			    anodes   : out  STD_LOGIC_VECTOR(3 downto 0);
+			    anodes   : out  STD_LOGIC_VECTOR(7 downto 0);
 			    sysclock : in  STD_LOGIC);
 	end component;
 	
@@ -95,7 +97,8 @@ END COMPONENT;
 
 	signal address : std_logic_vector(datapath_size - 1 downto 0);
 	signal read_data : std_logic_vector(datapath_size - 1 downto 0);
-	signal write_enable : std_logic; 
+	signal io_enable : std_logic;
+	signal write_enable : std_logic_vector(0 downto 0);  -- generated RAM has this type
 	signal mem_enable : std_logic;
 	
 begin
@@ -105,22 +108,25 @@ begin
 ------------- From the INSTANTIATION Template ----- INST_TAG
 	Data_RAM : data_mem
 	PORT MAP (clka => phi2,
-				 ena => mem_enable,
-             wea => wea,
-             addra => add_bus,
+             wea => write_enable,
+             addra => add_bus(7 downto 0),
              dina => wd_bus,
-             douta => rd_bus);
+             douta => read_data);
 	 
 -- INST_TAG_END ------ End INSTANTIATION Template ------------
 
 
 	ioport0:  IO_Module
+	generic map (
+			datapath_size => datapath_size,
+			word_size => word_size)
 	Port map ( up => up,
 			     down => down,
 				  --  need to map reset here
 				  reset => reset,
-				  hexValue => port1,
-				  pcounter => pcounter,
+				  io_addr => add_bus,
+				  dataIn => wd_bus,
+				  dataOut => iovalue,
 				  -- physical I/O connections
 				  leds	 => digOut0,
 			     switches => digIn0,
@@ -131,28 +137,29 @@ begin
 				  
 	-- Set counter to  count up on Button 1 and down on Button 2. 
 	debounce1: Debouncer
-		Port map ( btn_in => digin(9),
+		Port map ( btn_in => digIn1(0),
 					  clk => phi2,
 					  db_btn => up);
 	
 	
 	debounce2: Debouncer
-		Port map ( btn_in => digin(10),
+		Port map ( btn_in => digIn1(1),
 					  clk => phi2,
 					  db_btn => down);
 	
 	-- Logic used to handle a read from an I/O port rather than memory. 
 	-- I/0 memory locations are all at 0xC0XX
+   -- need signals for data output bus to MUX between memory, IO, and Regsiter file.  
 	
-				  
-	mem_enable <= not io_enable and (MemRead or MemWrite);
-	write_enable <= (MemWrite = '1') and not io_enable;
+	io_enable <= '1' WHEN (add_bus(15 downto 0) = X"C0") ELSE '0';
+	mem_enable <= '1' WHEN (io_enable = '0') and ((MemRead or MemWrite) = '1') ELSE '0';
+	write_enable <= "1" WHEN ((MemWrite = '1') and (io_enable = '0')) ELSE "0";
 
 	
 	-- MUX to feed proper data from Memory, Register file, or I/O back to register file
-	mux 	<= 	read_data 	WHEN (not io_enable) and (not MemtoReg) 
-			ELSE 	add_bus  	WHEN (not io_enable) and MemtoReg
-			ELSE 	iovalue 		WHEN  io_enable
+	mux 	<= 	read_data 	WHEN ((io_enable = '0') and (MemtoReg = '0')) 
+			ELSE 	add_bus  	WHEN ((io_enable = '0') and (MemtoReg = '0'))
+			ELSE 	iovalue 		WHEN  (io_enable = '1')
 			ELSE 	(conv_std_logic_vector(-1,datapath_size));
 
 end behavior;
