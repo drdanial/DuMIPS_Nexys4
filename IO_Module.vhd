@@ -21,8 +21,6 @@
 ----------------------------------------------------------------------------------
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
-use IEEE.STD_LOGIC_ARITH.ALL;
-use IEEE.STD_LOGIC_UNSIGNED.ALL;
 
 ---- Uncomment the following library declaration if instantiating
 ---- any Xilinx primitives in this code.
@@ -33,12 +31,11 @@ entity IO_Module is
 	 generic (
 		datapath_size : integer;
 		word_size : integer);
-    Port ( up       : in STD_LOGIC;
-	        down     : in STD_LOGIC;
+    Port ( clk		  : in STD_LOGIC;
 			  reset    : in STD_LOGIC;
 			  io_addr  : in STD_LOGIC_VECTOR(15 downto 0);
-			  dataIn	  : in STD_LOGIC_VECTOR(15 downto 0);
-			  dataOut  : out STD_LOGIC_VECTOR(15 downto 0);
+			  dataWrite	  : in STD_LOGIC_VECTOR(15 downto 0);  -- values to display on a peripheral
+			  dataRead  : out STD_LOGIC_VECTOR(15 downto 0);  -- values read from peripheral
 			  -- physical I/O connections
 			  leds	  : out STD_LOGIC_VECTOR(15 downto 0);
 			  switches : in STD_LOGIC_VECTOR(15 downto 0);
@@ -70,9 +67,15 @@ component counter is
 			  pcounter     : out std_logic_vector(15 downto 0)); -- 16 bit counter
 end component counter;
 
+	component Debouncer is
+		Port ( btn_in : in STD_LOGIC;
+				 clk : in STD_LOGIC;
+				 db_btn : out STD_LOGIC);
+		end component;
+
 
 -- internal signals
---signal up, down : STD_LOGIC;
+	signal up, down : STD_LOGIC;
 	signal io_enable : STD_LOGIC;
 	signal counterValue : STD_LOGIC_VECTOR(15 downto 0);
 	signal sevenSegmentValue : STD_LOGIC_VECTOR(31 downto 0);
@@ -96,9 +99,21 @@ display: component sevenSegmentDisplay
 			  sysclock => sysclock,
            sevenSegs => segments,
            anodes => anodes);
-			  
-			  
 
+	-- Set counter to  count up on Button Upper and down on Button Lower. 
+	-- mapping for counter up/down
+	debounce1: Debouncer
+		Port map ( btn_in => buttons(4),
+					  clk => clk,
+					  db_btn => up);
+	
+	
+	debounce2: Debouncer
+		Port map ( btn_in => buttons(2),
+					  clk => clk,
+					  db_btn => down);
+	
+			  
 	-- all 16 switches
 	-- all 6 buttons (plus any other inputs).
 
@@ -108,7 +123,7 @@ display: component sevenSegmentDisplay
 	
 	-- MUX to get proper data input given lower 8 bits of address
 	
-	dataOut <= switches			 		WHEN io_addr(7 downto 0) = X"00"  -- read from digital switches 0xC000
+	dataRead <= switches			 		WHEN io_addr(7 downto 0) = X"00"  -- read from digital switches 0xC000
 			ELSE buttons					WHEN io_addr(7 downto 0) = X"04"  -- read from buttons 0xC004
 			ELSE counterValue				WHEN io_addr(7 downto 0) = X"08"  -- read from counter 0xC008
 			ELSE "1111100000000001" ;  -- this line needs modifying if datapath_size changes 
@@ -124,9 +139,9 @@ display: component sevenSegmentDisplay
 	-- lower four digits of seven-seg display
 	-- all 16 LEDs at once.			
 			case io_addr(7 downto 0) is 
-				when X"80" => leds <= dataIn;
-			   when X"84" => sevenSegmentValue(15 downto 0) <= dataIn;
-				when X"88" => sevenSegmentValue(31 downto 16) <= dataIn;
+				when X"80" => leds <= dataWrite;
+			   when X"84" => sevenSegmentValue(15 downto 0) <= dataWrite;
+				when X"88" => sevenSegmentValue(31 downto 16) <= dataWrite;
 				when others => null ;
 			end case;
 						

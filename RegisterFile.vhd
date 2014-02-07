@@ -20,8 +20,6 @@
 
 library IEEE; 
 use IEEE.STD_LOGIC_1164.all; 
-USE IEEE.STD_LOGIC_ARITH.ALL;
-USE IEEE.STD_LOGIC_UNSIGNED.ALL;
 USE IEEE.numeric_std.ALL;
 
 
@@ -46,15 +44,15 @@ begin
   -- write third port on rising edge of clock
   process(clk) begin
     if (clk'event and clk = '1') then
-       if we3 = '1' then regfile(CONV_INTEGER(wa3)) <= wd3;
+       if we3 = '1' then regfile(to_INTEGER(unsigned(wa3))) <= wd3;
        end if;
     end if;
   end process;
 
-  rd1 <= conv_std_logic_vector(0,datapath_size) when (conv_integer(ra1) = 0) -- register 0 holds 0
-         else regfile(CONV_INTEGER(ra1));
-  rd2 <= conv_std_logic_vector(0,datapath_size) when (conv_integer(ra2) = 0) -- register 0 holds 0
-         else regfile(CONV_INTEGER(ra2));
+  rd1 <= std_logic_vector(to_unsigned(0,datapath_size)) when (to_integer(unsigned(ra1)) = 0) -- register 0 holds 0
+         else regfile(to_INTEGER(unsigned(ra1)));
+  rd2 <= std_logic_vector(to_unsigned(0,datapath_size)) when (to_integer(unsigned(ra2)) = 0) -- register 0 holds 0
+         else regfile(to_INTEGER(unsigned(ra2)));
 
 end;
 

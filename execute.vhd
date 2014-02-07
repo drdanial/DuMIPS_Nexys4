@@ -5,8 +5,8 @@
 --
 library IEEE;
 use IEEE.STD_LOGIC_1164.all;
-USE IEEE.STD_LOGIC_ARITH.ALL;
-USE IEEE.STD_LOGIC_UNSIGNED.ALL;
+USE IEEE.numeric_std.ALL;
+
 --library SYNTH;
 --use SYNTH.VHDLSYNTH.ALL;
 --use SYNTH.VL_COMPS.ALL;
@@ -66,17 +66,18 @@ architecture behavior of Execute is
 
 
 		-- Generate Zero Flag
-		Zero <= '1' WHEN (ResMux(datapath_size - 1 downto 0) = conv_std_logic_vector(0,datapath_size)) 
+		Zero <= '1' WHEN (ResMux(datapath_size - 1 downto 0)) = std_logic_vector(to_unsigned(0,datapath_size)) 
 						ELSE '0';    
 
 		-- Select ALU output  
-		ALUresult <= (conv_std_logic_vector(0,datapath_size - 1)) & ResMux(datapath_size - 1) 
+		ALUresult <= std_logic_vector(to_unsigned(0,datapath_size - 1)) & ResMux(datapath_size - 1) 
 						WHEN ALUctl="00111"   							-- choice for SLT instruction
 						ELSE ResMux(datapath_size - 1 downto 0);	-- all other instructions
 						
 		-- Adder for Branch Address with MUX for BRANCH or JR
 		Addresult <= Ainput WHEN ALUctl = "11001" --  JR
-						ELSE PCadd + (Extend(datapath_size - 3 downto 0) & "00");  -- BRANCH
+						ELSE std_logic_vector(unsigned(PCadd) 
+								+ unsigned(Extend(datapath_size - 3 downto 0) & "00"));  -- BRANCH
 
 		Process (ALUctl,Ainput,Binput,ShiftedValue,PCadd)
 		begin
@@ -87,7 +88,7 @@ architecture behavior of Execute is
 				 -- ALU performs ALUresult = bus_A OR bus_B
 				 WHEN "00001" => ResMux <= Ainput OR Binput;	-- need to make this happen for a li inst. 
 				 -- ALU performs ALUresult = bus_A + bus_B
-				 WHEN "00010" => ResMux <= Ainput + Binput;
+				 WHEN "00010" => ResMux <= std_logic_vector(signed(Ainput) + signed(Binput));
 				 -- ALU performs ??  Let's just make this the XOR function  
 				 WHEN "00011" => ResMux <= Ainput XOR Binput;
 				 -- ALU performs bus_A AND NOT bus_B
@@ -95,9 +96,9 @@ architecture behavior of Execute is
 				 -- ALU performs bus_A OR NOT bus_B
 				 WHEN "00101" => ResMux <= Ainput OR NOT Binput;
 				 -- ALU performs ALUresult = bus_A - bus_B
-				 WHEN "00110" => ResMux <= Ainput - Binput;  -- This is a subtract for BEQ
-				 -- ALU performs SLT which we won't use!
-				 WHEN "00111" => ResMux <= Ainput - Binput;
+				 WHEN "00110" => ResMux <= std_logic_vector(signed(Ainput) - signed(Binput)); -- This is a subtract for BEQ
+				 -- ALU performs SLT
+				 WHEN "00111" => ResMux <= std_logic_vector(signed(Ainput) - signed(Binput));
 --				 -- ALU performs MULTIPLY!! 
 --				 WHEN "01000" => ResMux <= (conv_std_logic_vector(
 --													conv_integer(Ainput) * conv_integer(Binput), datapath_size));
@@ -110,7 +111,7 @@ architecture behavior of Execute is
 --				 WHEN "10000"	=> ResMux <= (conv_std_logic_vector(233,datapath_size));  -- alternative for testing
 				 WHEN "11000"	=> ResMux <= PCadd;  -- need to pass PC to register file for JAL instruction
 				 WHEN "11001"  => ResMux <= Ainput;  -- Pass through for JR instruction. 
-				 WHEN Others => ResMux <= (conv_std_logic_vector(238,datapath_size));  -- display two E's on error.
+				 WHEN Others => ResMux <= std_logic_vector(to_unsigned(238,datapath_size));  -- display two E's on error.
 			 end case;
 		end process;
 end behavior;

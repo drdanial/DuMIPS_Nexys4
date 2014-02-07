@@ -51,7 +51,7 @@ COMPONENT data_mem
   PORT (
     clka : IN STD_LOGIC;
 	 wea : IN STD_LOGIC_VECTOR(0 DOWNTO 0);
-    addra : IN STD_LOGIC_VECTOR(7 DOWNTO 0);
+    addra : IN STD_LOGIC_VECTOR(9 DOWNTO 0);
     dina : IN STD_LOGIC_VECTOR(15 DOWNTO 0);
     douta : OUT STD_LOGIC_VECTOR(15 DOWNTO 0)
   );
@@ -63,12 +63,11 @@ END COMPONENT;
 		generic (
 			datapath_size : integer;
 			word_size : integer);
-		Port ( up       : in  STD_LOGIC;
-				 down     : in  STD_LOGIC;
-			    RESET    : in STD_LOGIC;
+		Port ( clk		 : in STD_LOGIC;
+				 reset    : in STD_LOGIC;
 				 io_addr  : in STD_LOGIC_VECTOR(datapath_size - 1 downto 0);
-			    dataIn   : in STD_LOGIC_VECTOR(15 downto 0);  -- values from inputs to processor
-				 dataOut  : out STD_LOGIC_VECTOR(15 downto 0); -- values to display locations
+			    dataWrite   : in STD_LOGIC_VECTOR(15 downto 0);  -- values to display locations
+				 dataRead  : out STD_LOGIC_VECTOR(15 downto 0); -- values from inputs to processor
 			  -- physical I/O connections
 				 leds	  : out STD_LOGIC_VECTOR(15 downto 0);
 			    switches : in STD_LOGIC_VECTOR(15 downto 0);
@@ -78,25 +77,17 @@ END COMPONENT;
 			    sysclock : in  STD_LOGIC);
 	end component;
 	
-	component Debouncer is
-		Port ( btn_in : in STD_LOGIC;
-				 clk : in STD_LOGIC;
-				 db_btn : out STD_LOGIC);
-		end component;
 
 	-- internal signals. 
 	signal mux : std_logic_vector(datapath_size - 1 downto 0);
+	signal memoryReadData : std_logic_vector(datapath_size - 1 downto 0);
+	signal ioReadData : std_logic_vector(datapath_size - 1 downto 0);
+	-- need vector for what comes from the IO module.  maybe? 
 	signal ioread : std_logic;
-	signal iovalue : std_logic_vector(datapath_size - 1 downto 0);
-	signal port1 : std_logic_vector(15 downto 0);  -- signal to hold value output to seven segment LEDs
-	signal pcounter : std_logic_vector(15 downto 0);
 	 
 --	type memory_array is array (0 to 2**dmem_size - 1) of std_logic_vector(datapath_size - 1 downto 0);
 --	signal mem : memory_array ; --:= (Shouldn't need to initialize RAM.
-	signal up, down : std_logic;
 
-	signal address : std_logic_vector(datapath_size - 1 downto 0);
-	signal read_data : std_logic_vector(datapath_size - 1 downto 0);
 	signal io_enable : std_logic;
 	signal write_enable : std_logic_vector(0 downto 0);  -- generated RAM has this type
 	signal mem_enable : std_logic;
@@ -109,9 +100,9 @@ begin
 	Data_RAM : data_mem
 	PORT MAP (clka => phi2,
              wea => write_enable,
-             addra => add_bus(7 downto 0),
+             addra => add_bus(9 downto 0),
              dina => wd_bus,
-             douta => read_data);
+             douta => memoryReadData);
 	 
 -- INST_TAG_END ------ End INSTANTIATION Template ------------
 
@@ -120,13 +111,11 @@ begin
 	generic map (
 			datapath_size => datapath_size,
 			word_size => word_size)
-	Port map ( up => up,
-			     down => down,
-				  --  need to map reset here
+	Port map ( clk  => phi2,
 				  reset => reset,
 				  io_addr => add_bus,
-				  dataIn => wd_bus,
-				  dataOut => iovalue,
+				  dataRead => ioReadData,
+				  dataWrite => wd_bus,
 				  -- physical I/O connections
 				  leds	 => digOut0,
 			     switches => digIn0,
@@ -135,32 +124,22 @@ begin
 				  anodes => anodes,
 				  sysclock => phi2);		-- get data from io pins if io read is taking place
 				  
-	-- Set counter to  count up on Button 1 and down on Button 2. 
-	debounce1: Debouncer
-		Port map ( btn_in => digIn1(0),
-					  clk => phi2,
-					  db_btn => up);
-	
-	
-	debounce2: Debouncer
-		Port map ( btn_in => digIn1(1),
-					  clk => phi2,
-					  db_btn => down);
-	
+
 	-- Logic used to handle a read from an I/O port rather than memory. 
 	-- I/0 memory locations are all at 0xC0XX
    -- need signals for data output bus to MUX between memory, IO, and Regsiter file.  
 	
 	io_enable <= '1' WHEN (add_bus(15 downto 0) = X"C0") ELSE '0';
-	mem_enable <= '1' WHEN (io_enable = '0') and ((MemRead or MemWrite) = '1') ELSE '0';
+--	mem_enable <= '1' WHEN (io_enable = '0') and ((MemRead or MemWrite) = '1') ELSE '0';
 	write_enable <= "1" WHEN ((MemWrite = '1') and (io_enable = '0')) ELSE "0";
 
 	
 	-- MUX to feed proper data from Memory, Register file, or I/O back to register file
-	mux 	<= 	read_data 	WHEN ((io_enable = '0') and (MemtoReg = '0')) 
-			ELSE 	add_bus  	WHEN ((io_enable = '0') and (MemtoReg = '0'))
-			ELSE 	iovalue 		WHEN  (io_enable = '1')
+	mux 	<= 	memoryReadData 	WHEN ((io_enable = '0') and (MemtoReg = '1') and MemRead = '1') 
+			ELSE 	add_bus  		WHEN ((io_enable = '0') and (MemtoReg = '0'))
+			ELSE 	ioReadData 		WHEN  (io_enable = '1') and (MemRead = '1')
 			ELSE 	(conv_std_logic_vector(-1,datapath_size));
-
+	rd_bus <= mux;
+	
 end behavior;
 

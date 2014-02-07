@@ -4,8 +4,6 @@
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.all;
-USE IEEE.STD_LOGIC_ARITH.ALL;
-USE IEEE.STD_LOGIC_UNSIGNED.ALL;
 USE IEEE.numeric_std.ALL;
 
 --library SYNTH;
@@ -38,9 +36,9 @@ end Ifetch;
 
 architecture behavior of Ifetch is
 
-	signal PC : std_logic_vector(datapath_size - 1 downto 0) := conv_std_logic_vector(0,datapath_size);
-	signal PCtemp : std_logic_vector(datapath_size - 1 downto 0) := conv_std_logic_vector(0,datapath_size);
-	signal PCaddtemp : std_logic_vector(datapath_size - 1 downto 0) := conv_std_logic_vector(0,datapath_size);
+	signal PC : std_logic_vector(datapath_size - 1 downto 0);
+	signal PCtemp : std_logic_vector(datapath_size - 1 downto 0);
+	signal PCaddtemp : std_logic_vector(datapath_size - 1 downto 0);
 	signal imemContent: std_logic_vector(word_size - 1 downto 0);
 	
 	-- Insert SPIM Machine Language Test Program Here
@@ -50,16 +48,11 @@ architecture behavior of Ifetch is
 -- place your machine code here:
 -- include assembly code as comments
 
-  X"3410c000", --  ori $16, $0, -16384      ; 12: ori $s0, $zero, 0xC000 # point a register at 0xC000 
-  X"00008825", --  or $17, $0, $0           ; 14: or $s1, $zero, $zero # $s1 points to memory 
-  X"8e080008", --  lw $8, 4($16)            ; 17: lw $t0, 4($s0) # get counter 
-  X"8e090000", --  lw $9, 0($16)            ; 18: lw $t1, 0($s0) # get switches and pushbuttons 
+	X"3410c000", X"8e120000", X"ae120080", X"8e110008",
+	X"ae110084", X"1000fffa", 
 
-  X"ae08000c", --  sw $8, 12($16)           ; 20: sw $t0, 12($s0) # display count on 7-segment display 
-  X"ae090080", --  sw $9, 8($16)            ; 21: sw $t1, 8($s0) # display switches 8 leds 
-  X"1000fffb", --  beq $0, $0, -20 [loop-0x00400018]
 	
-		(x"00000000"),	
+		(x"00000000"),	(x"00000000"),	
 		(x"00000000"),	(x"00000000"),	(x"00000000"),	(x"00000000"),
 		(x"00000000"),	(x"00000000"),	(x"00000000"),	(x"00000000"),
 
@@ -85,9 +78,8 @@ architecture behavior of Ifetch is
 	begin
 -- Increment PC by 4        
 --		PCout <= PC;
-      PCaddtemp(datapath_size - 1 downto 2) <= PC(datapath_size - 1 downto 2) + 1;
-		PCaddtemp(1 downto 0) <= "00";
-      PCadd <= PCaddtemp(datapath_size - 1 downto 0);  
+      PCaddtemp <= std_logic_vector(unsigned(PC) + 4);
+     PCadd <= PCaddtemp(datapath_size - 1 downto 0);  
 		
 -- Mux for Branch Address or Next Address        
 		PCtemp <= Addresult WHEN (((Branch='1') AND (Zero='1')) OR ((BranchNotEqual='1') AND (Zero='0')) OR (JR='1'))
@@ -98,7 +90,7 @@ architecture behavior of Ifetch is
         Begin
         if (phi2'event) and (phi2='1') then
 				If reset='1' then
-					PC<=(conv_std_logic_vector(0,datapath_size));
+					PC<= "0000000000000000";  -- DJN: would like a slicker way to do this.  
 					else PC<=PCtemp;
 				end if;
 		  end if;
@@ -107,7 +99,7 @@ architecture behavior of Ifetch is
 -- Fetch Instruction from memory     
       Process (PC)
           begin
- 				imemContent <= imem(conv_integer(PC(imem_size + 1 downto 2)));
+ 				imemContent <= imem(to_integer(unsigned(PC(imem_size + 1 downto 2))));
 			 end process;
 	instruction <= imemContent;
 end behavior;
