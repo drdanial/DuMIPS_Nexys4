@@ -14,7 +14,7 @@ USE IEEE.STD_LOGIC_ARITH.ALL;
 USE IEEE.STD_LOGIC_UNSIGNED.ALL;
 USE IEEE.numeric_std.ALL;
 
-entity memioctrl is
+entity dmemory is
 	generic (
 		datapath_size : integer;
 		word_size : integer;
@@ -23,10 +23,11 @@ entity memioctrl is
 
    port(
 		rd_bus : out std_logic_vector(datapath_size - 1 downto 0);
+		ra_bus : in std_logic_vector(datapath_size - 1 downto 0);
 		wd_bus : in std_logic_vector(datapath_size - 1 downto 0);
-		add_bus : in std_logic_vector(datapath_size - 1 downto 0);
-		MemRead, MemWrite, MemtoReg : in std_logic;
-
+		wadd_bus : in std_logic_vector(datapath_size - 1 downto 0);
+		MemRead, Memwrite, MemtoReg : in std_logic;
+		
 		-- ports that connect to 7 segment display anodes and cathodes.
 		segments : out std_logic_vector(0 to 7);      -- 8th bit is decimal point
 		anodes   : out std_logic_vector(7 downto 0);  -- for each of the eight digits
@@ -36,35 +37,22 @@ entity memioctrl is
 		digIn0 : in std_logic_vector(15 downto 0); 
 		-- buttons on Nexys4 plus whatever else we want to connect it to. 
 		digIn1 : in std_logic_vector(15 downto 0);
-		
 		phi2,reset: in std_logic);
 
-end memioctrl;
+end dmemory;
 
 
 
-architecture behavior of memioctrl is
+architecture behavior of dmemory is
 
 -- components:
-------------- Begin Cut here for COMPONENT Declaration ------ COMP_TAG
-COMPONENT data_mem
-  PORT (
-    clka : IN STD_LOGIC;
-	 wea : IN STD_LOGIC_VECTOR(0 DOWNTO 0);
-    addra : IN STD_LOGIC_VECTOR(9 DOWNTO 0);
-    dina : IN STD_LOGIC_VECTOR(15 DOWNTO 0);
-    douta : OUT STD_LOGIC_VECTOR(15 DOWNTO 0)
-  );
-END COMPONENT;
--- COMP_TAG_END ------ End COMPONENT Declaration ------------
-
-
 	component IO_Module is
 		generic (
 			datapath_size : integer;
 			word_size : integer);
 		Port ( clk		 : in STD_LOGIC;
 				 reset    : in STD_LOGIC;
+				 enable   : in STD_LOGIC;
 				 io_addr  : in STD_LOGIC_VECTOR(datapath_size - 1 downto 0);
 			    dataWrite   : in STD_LOGIC_VECTOR(15 downto 0);  -- values to display locations
 				 dataRead  : out STD_LOGIC_VECTOR(15 downto 0); -- values from inputs to processor
@@ -77,35 +65,29 @@ END COMPONENT;
 			    sysclock : in  STD_LOGIC);
 	end component;
 	
+	component Debouncer is
+		Port ( btn_in : in STD_LOGIC;
+				 clk : in STD_LOGIC;
+				 db_btn : out STD_LOGIC);
+		end component;
 
 	-- internal signals. 
 	signal mux : std_logic_vector(datapath_size - 1 downto 0);
+	signal io_enable : std_logic;
+	signal iovalue : std_logic_vector(datapath_size - 1 downto 0);
+	signal port1 : std_logic_vector(15 downto 0);  -- signal to hold value output to seven segment LEDs
+	signal pcounter : std_logic_vector(15 downto 0);
+	 
 	signal memoryReadData : std_logic_vector(datapath_size - 1 downto 0);
 	signal ioReadData : std_logic_vector(datapath_size - 1 downto 0);
-	-- need vector for what comes from the IO module.  maybe? 
-	signal ioread : std_logic;
-	 
---	type memory_array is array (0 to 2**dmem_size - 1) of std_logic_vector(datapath_size - 1 downto 0);
---	signal mem : memory_array ; --:= (Shouldn't need to initialize RAM.
 
-	signal io_enable : std_logic;
-	signal write_enable : std_logic_vector(0 downto 0);  -- generated RAM has this type
-	signal mem_enable : std_logic;
-	
+	type memory_array is array (0 to 2**dmem_size - 1) of std_logic_vector(datapath_size - 1 downto 0);
+	signal mem : memory_array ; --:= (Shouldn't need to initialize RAM.
+	signal up, down : std_logic;
+
 begin
 
 	-- component instantiation
-
-------------- From the INSTANTIATION Template ----- INST_TAG
-	Data_RAM : data_mem
-	PORT MAP (clka => phi2,
-             wea => write_enable,
-             addra => add_bus(9 downto 0),
-             dina => wd_bus,
-             douta => memoryReadData);
-	 
--- INST_TAG_END ------ End INSTANTIATION Template ------------
-
 
 	ioport0:  IO_Module
 	generic map (
@@ -113,7 +95,8 @@ begin
 			word_size => word_size)
 	Port map ( clk  => phi2,
 				  reset => reset,
-				  io_addr => add_bus,
+				  enable => io_enable,
+				  io_addr => wadd_bus,
 				  dataRead => ioReadData,
 				  dataWrite => wd_bus,
 				  -- physical I/O connections
@@ -124,22 +107,44 @@ begin
 				  anodes => anodes,
 				  sysclock => phi2);		-- get data from io pins if io read is taking place
 				  
+	
+	-- signals used to handle a read from an I/O port rather than memory. 
+				  
+	io_enable <= '1' WHEN (wadd_bus(15 downto 8) = X"C0") ELSE '0';
+	-- choose port 0 or port 1 to read
+	
+	-- Read Data Memory
+	mux <= mem(conv_integer(ra_bus(dmem_size - 1 downto 0)))
+	WHEN (io_enable = '0') ELSE ioReadData;
+		
+	-- Mux to skip data memory for Rformat instructions
+	rd_bus <= ra_bus(datapath_size - 1 downto 0) WHEN (MemtoReg = '0') ELSE 
+				 mux 											WHEN (MemRead = '1') ELSE 
+				 (conv_std_logic_vector(-1,datapath_size));
 
-	-- Logic used to handle a read from an I/O port rather than memory. 
-	-- I/0 memory locations are all at 0xC0XX
-   -- need signals for data output bus to MUX between memory, IO, and Regsiter file.  
+	-- The following process code handles reset and memory and output write operations. 
+	-- Note that memory writes and output writes take place on the clock edge.  
 	
-	io_enable <= '1' WHEN (add_bus(15 downto 0) = X"C0") ELSE '0';
---	mem_enable <= '1' WHEN (io_enable = '0') and ((MemRead or MemWrite) = '1') ELSE '0';
-	write_enable <= "1" WHEN ((MemWrite = '1') and (io_enable = '0')) ELSE "0";
+	process(phi2)
+		begin   
+		if phi2'event and phi2='1' then
+			if (reset = '1') then
+				  mem(0) <= conv_std_logic_vector(55,datapath_size);  -- we set these values just so we can see that a reset has occurred. 
+				  mem(1) <= conv_std_logic_vector(175,datapath_size);  
+			else
+				if Memwrite= '1' and wadd_bus(datapath_size - 1 downto datapath_size - 2) = "00" then 	-- Write to data memory?
+					mem(conv_integer(wadd_bus(dmem_size - 1 downto 0))) <= wd_bus;
+--				elsif Memwrite = '1' and wadd_bus(datapath_size - 1 downto datapath_size - 2) = "11" then  
+--						-- write to an output port
+--					if wadd_bus(3 downto 0) = "1000" then  --- address 0xC008 is LEDS
+--						port0 <= wd_bus(7 downto 0);
+--					elsif wadd_bus(3 downto 0) = "1100" then  --- address 0xC00C is Seven Segment Display
+--						port1 <= wd_bus(15 downto 0);
+--					end if;  -- Can add more here if we get a new output port. 
+				end if;
+			end if;
+		end if;
+		end process;
 
-	
-	-- MUX to feed proper data from Memory, Register file, or I/O back to register file
-	mux 	<= 	memoryReadData WHEN ((io_enable = '0') and (MemtoReg = '1') and MemRead = '1') ELSE
-					add_bus  		WHEN ((io_enable = '0') and (MemtoReg = '0')) ELSE
-					ioReadData 		WHEN  (io_enable = '1') and (MemRead = '1')	ELSE
-					(conv_std_logic_vector(-1,datapath_size));
-	rd_bus <= mux;
-	
 end behavior;
 

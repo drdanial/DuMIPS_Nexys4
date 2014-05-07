@@ -32,10 +32,10 @@ generic (
 			dmem_size : integer := 3 		-- address width of data memory
 			);
 port(    reset_in,sys_clk: in std_logic; 
-			switchin  : in std_logic_vector(15 downto 0); -- 16 switches  
-			leds      : out std_logic_vector(15 downto 0); -- 16 LEDs
+			switchin  : in std_logic_vector(15 downto 0); -- all 16 switches 
 			buttons	 : in std_logic_vector(15 downto 0);  -- buttons and anthing else we want to connect
-			anodes    : out std_logic_vector(7 downto 0); -- the 8 seven-seg LED anodes
+			leds      : out std_logic_vector(15 downto 0);
+			anodes    : out std_logic_vector(7 downto 0);
 			segments  : out std_logic_vector(0 to 7));  -- 8th bit is decimal point
 
 end DuMIPS;
@@ -60,8 +60,6 @@ architecture structure of DuMIPS is
 		  JR: in std_logic;
         phi2,reset : in std_logic;
         Zero : in std_logic);
---        PCout : out std_logic_vector(7 downto 0));
-
    end component;
 
    component Idecode 
@@ -98,8 +96,6 @@ architecture structure of DuMIPS is
 				 JR		: out std_logic;
 				 ALUctl : out std_logic_vector(4 downto 0);
 				 Funct : in std_logic_vector(5 downto 0));
-				 --phi2: in std_logic);
-	
 	 end component;
 
    component  Execute  
@@ -118,12 +114,10 @@ architecture structure of DuMIPS is
 				 ALUResult : out std_logic_vector(datapath_size - 1 downto 0);
 				 ADDResult : out std_logic_vector(datapath_size - 1 downto 0);
 				 PCadd : in std_logic_vector(datapath_size - 1 downto 0));
-				 --phi2: in std_logic);
-
 	end component;
 
 
-   component memioctrl 
+   component dmemory 
 		generic (
 			datapath_size : integer;
 			word_size : integer;
@@ -131,8 +125,9 @@ architecture structure of DuMIPS is
 		);
 		port(
 		  rd_bus : out std_logic_vector(datapath_size - 1 downto 0);
+        ra_bus : in std_logic_vector(datapath_size - 1 downto 0);
         wd_bus : in std_logic_vector(datapath_size - 1 downto 0);
-        add_bus : in std_logic_vector(datapath_size - 1 downto 0);
+        wadd_bus : in std_logic_vector(datapath_size - 1 downto 0);
         MemRead, Memwrite, MemtoReg : in std_logic;
 			-- ports that connect to 7 segment display anodes and cathodes.
 			segments : out std_logic_vector(0 to 7);      -- 8th bit is decimal point
@@ -143,7 +138,7 @@ architecture structure of DuMIPS is
 			digIn0 : in std_logic_vector(15 downto 0); 
 			-- buttons on Nexys4 plus whatever else we want to connect it to. 
 			digIn1 : in std_logic_vector(15 downto 0);
-			phi2,reset: in std_logic);
+		  phi2,reset: in std_logic);
 
    end component;
 
@@ -171,11 +166,16 @@ architecture structure of DuMIPS is
    signal MemWrite :  std_logic := '0';
    signal ALUctl :  std_logic_vector(4 downto 0) := "00000";
    signal MIPS_Inst: std_logic_vector(word_size - 1 downto 0) := conv_std_logic_vector(0,word_size);
-	signal disp0: std_logic_vector(7 downto 0);
+	signal disp0: std_logic_vector(15 downto 0);
 
 
 
 begin
+
+	reset <= not reset_in;
+	phi2 <= sys_clk;
+	leds <= disp0;
+	
 --   Out_Inst <= MIPS_Inst;
    IFE : Ifetch 
 	generic map (
@@ -224,7 +224,6 @@ begin
 			JR   => JR,
 			ALUctl => ALUctl,
          Funct => MIPS_Inst(5 downto 0));
-		--	phi2 => phi2);
 
    EXE:  Execute   
 	generic map (
@@ -242,9 +241,8 @@ begin
 			ALUResult => ALUResult,
 			ADDResult => ADDResult,
 			PCadd => PCadd);
-			--phi2 => phi2);
 
-   MEMIO:  memioctrl 
+   MEM:  dmemory 
 	generic map (
 			datapath_size => datapath_size,
 			word_size => word_size,
@@ -252,34 +250,33 @@ begin
 			)
 	port map ( 
 			rd_bus => wrd_bus,
+			ra_bus => ALUResult,
 			wd_bus => rr2d_bus,
-			add_bus => ALUResult,
+			wadd_bus => ALUResult,
 			MemRead => MemRead, 
 			Memwrite => MemWrite, 
 			MemtoReg => MemtoReg,
-			
+			-- connections to I/O devices on the board. 
 			-- connections to I/O devices on the board. 
 			segments => segments,
 			anodes => anodes,
 			-- I/O ports to the processor follow here
-			digOut0 => leds,
+			digOut0 => disp0,
 			-- go to slide switches on Nexys4
 			digIn0 => switchin,
 			-- buttons on Nexys4 plus whatever else we want to connect it to. 
 			digIn1 => buttons,
-			phi2 => phi2, reset => reset);
+			phi2 => phi2, 
+			reset => reset);
 
-	-- reset button is active low when pressed.  Opposite of other buttons. 
-	reset <= not reset_in;
 	
---	phi2 <= sys_clk;  If we can get the delay small enough, we won't have to divide the clock.  
-process(sys_clk,phi2) 
-	begin
-	if (sys_clk'event and sys_clk = '1') then
-		phi2 <= not phi2;
-	end if;
-	end process;
-	
+--process(sys_clk,phi2) 
+--	begin
+--	if (sys_clk'event and sys_clk = '1') then
+--		phi2 <= not phi2;
+--	end if;
+--	end process;
+--	
 	
 end structure;
 

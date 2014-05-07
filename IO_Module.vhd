@@ -33,6 +33,7 @@ entity IO_Module is
 		word_size : integer);
     Port ( clk		  : in STD_LOGIC;
 			  reset    : in STD_LOGIC;
+			  enable	  : in STD_LOGIC;
 			  io_addr  : in STD_LOGIC_VECTOR(15 downto 0);
 			  dataWrite	  : in STD_LOGIC_VECTOR(15 downto 0);  -- values to display on a peripheral
 			  dataRead  : out STD_LOGIC_VECTOR(15 downto 0);  -- values read from peripheral
@@ -76,7 +77,6 @@ end component counter;
 
 -- internal signals
 	signal up, down : STD_LOGIC;
-	signal io_enable : STD_LOGIC;
 	signal counterValue : STD_LOGIC_VECTOR(15 downto 0);
 	signal sevenSegmentValue : STD_LOGIC_VECTOR(31 downto 0);
 	
@@ -117,10 +117,6 @@ display: component sevenSegmentDisplay
 	-- all 16 switches
 	-- all 6 buttons (plus any other inputs).
 
-	io_enable <= '1' WHEN io_addr(datapath_size - 1 downto datapath_size - 8) = X"C0"
-				ELSE '0';
-	
-	
 	-- MUX to get proper data input given lower 8 bits of address
 	
 	dataRead <= switches			 		WHEN io_addr(7 downto 0) = X"00"  -- read from digital switches 0xC000
@@ -130,18 +126,19 @@ display: component sevenSegmentDisplay
 	
 	--DJN: need to fix this so that the output is enabled at the proper time.  Input can
 	--always happen and will be muxed out at one level up.  
-
-	PROCESS(io_enable)
+--	leds(15 downto 8) <= "10100101";
+--	leds(7 downto 0) <= dataWrite(7 downto 0);
+	
+	
+	PROCESS(clk,enable)
 	BEGIN
-		if (io_enable'event) and (io_enable = '1') then
+		if (rising_edge(clk) AND enable = '1') then
 		-- here we write to one of the following connections.  
-	-- upper four digits of seven-seg display
-	-- lower four digits of seven-seg display
-	-- all 16 LEDs at once.			
+	
 			case io_addr(7 downto 0) is 
-				when X"80" => leds <= dataWrite;
-			   when X"84" => sevenSegmentValue(15 downto 0) <= dataWrite;
-				when X"88" => sevenSegmentValue(31 downto 16) <= dataWrite;
+				when X"80" => leds <= dataWrite;                -- all 16 LEDs at once.		
+			   when X"84" => sevenSegmentValue(15 downto 0) <= dataWrite;	   -- lower four digits of seven-seg display
+				when X"88" => sevenSegmentValue(31 downto 16) <= dataWrite;    -- upper four digits of seven-seg display
 				when others => null ;
 			end case;
 						
